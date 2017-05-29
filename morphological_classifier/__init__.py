@@ -1,2 +1,1 @@
-from data_formatter import *
-from word_parser import *
+from . import tests

@@ -1,3 +1,6 @@
+import numpy as np
+
+D_TYPE = 'float64'
 ENCODING = 'iso-8859-1'
 SEPARATOR = '$'
 TARGET_TAGS = [
@@ -6,7 +9,11 @@ TARGET_TAGS = [
     'V',
     'N',
 ]
+NUM_CLASSES = len(TARGET_TAGS)
 TARGET_CLASSES = [
-    np.array([1 if i == j else 0 for i in range(len(TARGET_TAGS))]) for j in range(len(TARGET_TAGS))
+    np.array([1,0,0,0], dtype=D_TYPE),
+    np.array([0,1,0,0], dtype=D_TYPE),
+    np.array([0,0,1,0], dtype=D_TYPE),
+    np.array([0,0,0,1], dtype=D_TYPE),
 ]
 TAGS_CLASSES = dict(zip(TARGET_TAGS, TARGET_CLASSES))

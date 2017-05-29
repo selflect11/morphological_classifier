@@ -1,8 +1,10 @@
+from . import constants
 import string
 from nltk import stem
 import numpy as np
+from collections import OrderedDict
 
-SEPARATOR = '$'
+SEPARATOR = constants.SEPARATOR
 
 def separate_word(word):
     # run RSLP algorithm on word
@@ -15,17 +17,20 @@ def separate_word(word):
         return word
     return radical + SEPARATOR + rest
 
-def word_to_dict(separated_word):
+def word_to_array(separated_word):
     binary_mask = [0 for each in range(len(separated_word))]
     max_binary = list_to_float([1 for each in binary_mask])
-    word_vec = {letter : list(binary_mask) for letter in string.ascii_lowercase}
-    word_vec[SEPARATOR] = list(binary_mask)
-    # populates word_vec
+    letter_dict = OrderedDict()
+    # ascii_lowercase = 'abcdef...xyz'
+    for letter in string.ascii_lowercase:
+        letter_dict[letter] = list(binary_mask)
+    letter_dict[SEPARATOR] = list(binary_mask)
+    # populates letter_dict
     for index, letter in enumerate(separated_word):
-        word_vec[letter][index] = 1 
-    # converts word_vec to numeric form, also normalizing it
-    word_vec = {letter : list_to_float(vec)/max_binary for letter, vec in word_vec.items()}
-    return word_vec
+        letter_dict[letter][index] = 1 
+    # converts letter_dict to numeric form, also normalizing it
+    word_array = np.array([list_to_float(vec)/max_binary for vec in letter_dict.values()], dtype=constants.D_TYPE)
+    return word_array
 
 def list_to_float(lst):
     # big endian std
@@ -35,7 +40,4 @@ def list_to_float(lst):
     return num
 
 def parse_word(word):
-    sep_word = separate_word(word)
-    letter_dic = word_to_dic(sep_word)
-    array = np.array(list(letter_dic.values()), dtype='float64')
-    return array
+   return word_to_array(separate_word(word))

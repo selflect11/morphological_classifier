@@ -1,3 +1,5 @@
+# run tests like so:
+# C:\Users\Volpi\Google Drive\TCC\morphological_classifier> py -3 -m morphological_classifier.tests.tests_morphological_classifier
 try:
     from setuptools import setup
 except ImportError:
