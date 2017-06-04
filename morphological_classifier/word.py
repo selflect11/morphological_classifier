@@ -3,6 +3,7 @@ from . import word_parser
 from . import data_formatter
 from nltk import stem
 import numpy as np
+import pickle
 from collections import OrderedDict
 
 class Text:
@@ -17,6 +18,13 @@ class Text:
             for line in lines:
                 words = line.split(' ')
                 self.add_line(words)
+    def load(self, filepath):
+        with open(filepath, 'rb') as f:
+            tmp_dict = pickle.load(f)
+        self.__dict__.update(tmp_dict)
+    def save(self, filepath):
+        with open(filepath, 'wb') as f:
+            pickle.dump(self.__dict__, f)
     def write_to_file(self):
         # not sure if necessary
         pass
