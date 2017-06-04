@@ -23,15 +23,16 @@ class Text:
 
 class Word:
     def __init__(self, word_plus_tags):
-        self.word, self.tags = self.word_tag_separate(word_plus_tags)
-        self.array = self.string_to_array(self.word)
+        self.word, tags = self.word_tag_separate(word_plus_tags)
+        self.array = WordArray(self.word)
+        self.tags = TagSet(tags)
     def word_tag_separate(self, word_plus_tag):
         word, tags_str = word_plus_tags.split('_')
         tags = TagSet(tags_str)
         separated_word = self.separate_word(word)
         return separated_word, tags
     def separate_word(self, word_str):
-        # runs RSLP algorithm
+        # RSLP algorithm
         separator = constants.SEPARATOR
         word_str = word_str.lower()
         stemmer = stem.rslp.RSLPStemmer()
@@ -41,21 +42,32 @@ class Word:
             print('Couldnt separate word {}'.format(word_str))
             return word
         return radical + separator + rest
-    def string_to_array(separated_word):
+    
+class WordArray:
+    def __init__(self, separated_word):
+        self.letter_dic = self.string_to_dic(separated_word)
+        self.array = self.dic_to_array(self.letter_dic)
+    def string_to_dic(self, separated_word):
         list_to_float = data_formatter.list_to_float
         binary_mask = [0 for each in range(len(separated_word))]
         max_binary = word_parser.list_to_float([1 for each in binary_maks])
-        letter_dict = OrderedDict()
+        letter_dic = OrderedDict()
         # ascii_lowercase = 'abcdef...xyz'
         for letter in string.ascii_lowercase:
-            letter_dict[letter] = list(binary_mask)
-        letter_dict[SEPARATOR] = list(binary_mask)
-        # populates letter_dict
+            letter_dic[letter] = list(binary_mask)
+        letter_dic[SEPARATOR] = list(binary_mask)
+        # populates letter_dic
         for index, letter in enumerate(separated_word):
-            letter_dict[letter][index] = 1 
-        # converts letter_dict to numeric form, also normalizing it
-        word_array = np.array([list_to_float(vec)/max_binary for vec in letter_dict.values()], dtype=constants.D_TYPE)
-        return word_array
+            letter_dic[letter][index] = 1 
+        # converts letter_dic to numeric form, also normalizing it
+        letter_dic = {letter : list_to_float(vec)/max_binary for letter, vec in letter_dic.items()}
+        return letter_dic
+    def dic_to_array(self, dic):
+        return np.array(list(dic.values()), dtype=constants.D_TYPE)
+    def __getitem__(self, key):
+        if self.letter_dic is None:
+            raise KeyError('Key {} not found'.format(key))
+        return self.letter_dic[key]
 
 class TagSet:
     def __init__(self, tags_string = ''):
@@ -104,4 +116,4 @@ class Tag:
             return True
         return False
     def __hash__(self):
-        return hash((self.tag, self.tag_class))
+        return hash(self.tag)

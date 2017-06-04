@@ -10,15 +10,16 @@ import os
 class TestTagSet(unittest.TestCase):
     global TagSet
     TagSet = word.TagSet
-    def test_tag_set(self):
-        #self.assertCountEqual(TagSet('ADJ+N').tag_set, ['ADJ', 'N'])
-        pass
     def test_tag_separator(self):
         self.assertCountEqual(TagSet().tag_separator('ADJ+N'), ['ADJ', 'N'])
         self.assertCountEqual(TagSet().tag_separator('ADJ'), ['ADJ',])
         self.assertCountEqual(TagSet().tag_separator('T+ADJ+N'), ['T', 'ADJ', 'N'])
     def test_str_to_tags(self):
         self.assertCountEqual(TagSet().str_to_tags(['ADJ','ADV']), [word.Tag('ADJ'), word.Tag('ADV')])
+        self.assertEqual(word.Tag('ADJ-KS'), word.Tag('ADJ'))
+        tag1, tag2 = TagSet().str_to_tags(['ADJ', 'ADV'])
+        self.assertEqual(tag1, word.Tag('ADJ'))
+        self.assertEqual(tag2, word.Tag('ADV'))
 
 class TestTagClass(unittest.TestCase):
     global Tag 
