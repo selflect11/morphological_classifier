@@ -1,9 +1,11 @@
 from . import constants
 from . import word_parser
 from . import data_formatter
+from .tools import list_to_float
 from nltk import stem
 import numpy as np
 import pickle
+import string
 from collections import OrderedDict
 
 class Text:
@@ -12,7 +14,7 @@ class Text:
     def add_line(self, words_list):
         for w in words_list:
             self.words.append(Word(w))
-    def load(self, filepath):
+    def read_file(self, filepath):
         with open(filepath, 'r') as f:
             lines = f.readlines()
             for line in lines:
@@ -31,10 +33,10 @@ class Text:
 
 class Word:
     def __init__(self, word_plus_tags):
-        self.word, tags = self.word_tag_separate(word_plus_tags)
+        self.word, tags_str = self.word_tag_separate(word_plus_tags)
         self.array = WordArray(self.word)
-        self.tags = TagSet(tags)
-    def word_tag_separate(self, word_plus_tag):
+        self.tags_str = TagSet(tags_str)
+    def word_tag_separate(self, word_plus_tags):
         word, tags_str = word_plus_tags.split('_')
         tags = TagSet(tags_str)
         separated_word = self.separate_word(word)
@@ -45,10 +47,10 @@ class Word:
         word_str = word_str.lower()
         stemmer = stem.rslp.RSLPStemmer()
         radical = stemmer.stem(word_str)
-        rest = word.split(radical, 1)[1]
+        rest = word_str.split(radical, 1)[1]
         if not rest:
             print('Couldnt separate word {}'.format(word_str))
-            return word
+            return word_str
         return radical + separator + rest
     
 class WordArray:
@@ -56,9 +58,9 @@ class WordArray:
         self.letter_dic = self.string_to_dic(separated_word)
         self.array = self.dic_to_array(self.letter_dic)
     def string_to_dic(self, separated_word):
-        list_to_float = data_formatter.list_to_float
+        SEPARATOR = constants.SEPARATOR
         binary_mask = [0 for each in range(len(separated_word))]
-        max_binary = word_parser.list_to_float([1 for each in binary_maks])
+        max_binary = list_to_float([1 for each in binary_mask])
         letter_dic = OrderedDict()
         # ascii_lowercase = 'abcdef...xyz'
         for letter in string.ascii_lowercase:
@@ -73,7 +75,7 @@ class WordArray:
     def dic_to_array(self, dic):
         return np.array(list(dic.values()), dtype=constants.D_TYPE)
     def __getitem__(self, key):
-        if self.letter_dic is None:
+        if (self.letter_dic is None) or (key not in self.letter_dic):
             raise KeyError('Key {} not found'.format(key))
         return self.letter_dic[key]
 
@@ -97,6 +99,12 @@ class TagSet:
         if self.tag_set:
             return True
         return False
+    def __getitem__(self, index):
+        if index > len(self.tag_set):
+            raise IndexError('{} index too big'.format(index))
+        return self.tag_set[index]
+    def __eq__(self, other):
+        return (set(self.tag_set) == set(other.tag_set))
 
 class Tag:
     def __init__(self, tag_string):

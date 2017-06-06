@@ -32,12 +32,5 @@ def word_to_array(separated_word):
     word_array = np.array([list_to_float(vec)/max_binary for vec in letter_dict.values()], dtype=constants.D_TYPE)
     return word_array
 
-def list_to_float(lst):
-    # big endian std
-    num = 0
-    for index, coeff in enumerate(reversed(lst)):
-        num += coeff * (2**index)
-    return num
-
 def parse_word(word):
    return word_to_array(separate_word(word))
