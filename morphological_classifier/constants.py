@@ -1,7 +1,7 @@
 import numpy as np
 
 D_TYPE = 'float64'
-ENCODING = 'iso-8859-1'
+ENCODING = 'utf-8'
 SEPARATOR = '$'
 TARGET_TAGS = [
     'ADJ',

@@ -9,17 +9,18 @@ import string
 from collections import OrderedDict
 
 class Text:
-    def __init__(self, words):
-        self.words = []
-    def add_line(self, words_list):
-        for w in words_list:
-            self.words.append(Word(w))
+    def __init__(self):
+        self.words_list = []
+    def add_line(self, line):
+        for w in line.split(' '):
+            new_word = Word(w)
+            if new_word:
+                self.words_list.append(Word(w))
     def read_file(self, filepath):
         with open(filepath, 'r') as f:
             lines = f.readlines()
             for line in lines:
-                words = line.split(' ')
-                self.add_line(words)
+                self.add_line(line)
     def load(self, filepath):
         with open(filepath, 'rb') as f:
             tmp_dict = pickle.load(f)
@@ -30,18 +31,22 @@ class Text:
     def write_to_file(self):
         # not sure if necessary
         pass
+    def __getitem__(self, index):
+        return self.words_list[index]
 
 class Word:
     def __init__(self, word_plus_tags):
-        self.word, tags_str = self.word_tag_separate(word_plus_tags)
-        self.array = WordArray(self.word)
-        self.tags_str = TagSet(tags_str)
+        self.word, self.tag_set = self.word_tag_separate(word_plus_tags)
+        if self.tag_set:
+            self.array = WordArray(self.word)
+        else:
+            self.array = None
     def word_tag_separate(self, word_plus_tags):
         word, tags_str = word_plus_tags.split('_')
         tags = TagSet(tags_str)
-        separated_word = self.separate_word(word)
+        separated_word = self.separate_word_from_radical(word)
         return separated_word, tags
-    def separate_word(self, word_str):
+    def separate_word_from_radical(self, word_str):
         # RSLP algorithm
         separator = constants.SEPARATOR
         word_str = word_str.lower()
@@ -52,6 +57,13 @@ class Word:
             print('Couldnt separate word {}'.format(word_str))
             return word_str
         return radical + separator + rest
+    def __eq__(self, other):
+        if isinstance(other, Word):
+            return (self.word == other.word)
+        else:
+            return (self.word == other)
+    def __bool__(self):
+        return bool(self.tag_set)
     
 class WordArray:
     def __init__(self, separated_word):
@@ -75,36 +87,40 @@ class WordArray:
     def dic_to_array(self, dic):
         return np.array(list(dic.values()), dtype=constants.D_TYPE)
     def __getitem__(self, key):
-        if (self.letter_dic is None) or (key not in self.letter_dic):
+        if key not in self.letter_dic:
             raise KeyError('Key {} not found'.format(key))
+        elif self.letter_dic is None:
+            raise Exception('Dict not initialized')
         return self.letter_dic[key]
 
 class TagSet:
     def __init__(self, tags_string = ''):
-        self.tag_set = self.str_to_tags(tags_string)
+        self.tags_list = self.str_to_tags_list(tags_string)
         self.tag_class = self.get_hybrid_class()
-    def tag_separator(self, tags_string):
-        tags_list = tags_string.split('+')
-        return tags_list
-    def str_to_tags(self, tags_list):
-        tag_set = []
-        for t in tags_list:
+    def str_to_tags_list(self, tags_string):
+        str_list = tags_string.split('+')
+        tags_list = []
+        for t in str_list:
             new_tag = Tag(t)
             if new_tag:
-                tag_set.append(new_tag)
-        return tag_set
+                tags_list.append(new_tag)
+        return tags_list
     def get_hybrid_class(self):
-        return sum(tag.tag_class for tag in self.tag_set)
+        if bool(self):
+            return sum(tag.tag_class for tag in self.tags_list)
+        return np.zeros(4)
     def __bool__(self):
-        if self.tag_set:
+        if self.tags_list:
             return True
         return False
     def __getitem__(self, index):
-        if index > len(self.tag_set):
+        if index > len(self.tags_list):
             raise IndexError('{} index too big'.format(index))
-        return self.tag_set[index]
+        return self.tags_list[index]
     def __eq__(self, other):
-        return (set(self.tag_set) == set(other.tag_set))
+        return (set(self.tags_list) == set(other.tags_list))
+    def __str__(self):
+        return ",".join(str(tag) for tag in self)
 
 class Tag:
     def __init__(self, tag_string):
@@ -133,3 +149,5 @@ class Tag:
         return False
     def __hash__(self):
         return hash(self.tag)
+    def __str__(self):
+        return self.tag
