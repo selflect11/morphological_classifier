@@ -1,6 +1,6 @@
-from .. import constants
-from ..word import Text, Word, WordArray, TagSet, Tag
-from .. import tools
+# -*- coding: iso-8859-1 -*-
+from .. import constants, tools
+from ..data_structures import Text, Word, WordArray, TagSet, Tag
 import numpy as np
 import unittest
 import tempfile
@@ -16,8 +16,9 @@ class TestText(unittest.TestCase):
             with self.subTest(word = word):
                 self.assertEqual(word, answer[index])
     def test_read_file(self):
+        # ver questão dos acentos...
         in_str = 'Teste_N maior_ADJ ,_P agora_N é_V pra_PREP valer_V'
-        with tempfile.NamedTemporaryFile(mode='w', delete=False) as f:
+        with tempfile.NamedTemporaryFile(mode='w', encoding=constants.ENCODING, delete=False) as f:
             f.write(in_str)
         txt = Text()
         txt.read_file(f.name)
@@ -25,6 +26,25 @@ class TestText(unittest.TestCase):
         for index, word in enumerate(txt):
             with self.subTest(word = word):
                 self.assertEqual(word, answer[index])
+    def test_get_data(self):
+        txt = Text()
+        line = 'Teste_N novo_N'
+        txt.add_line(line)
+        word_arrays, tag_classes = txt.get_data()
+        # setup answer
+        word_strs = line.split(' ')
+        words = [Word(ws) for ws in word_strs]
+        answer_word_arrays = [w.get_array() for w in words]
+        answer_tag_classes = [w.get_tag_class() for w in words]
+        # tests
+        for index_i, entry in enumerate(word_arrays):
+            for index_j, coeff in enumerate(entry):
+                with self.subTest(coeff = coeff):
+                    self.assertAlmostEqual(coeff, answer_word_arrays[index_i][index_j], places=3)
+        for index_i, entry in enumerate(tag_classes):
+            for index_j, coeff in enumerate(entry):
+                with self.subTest(coeff = coeff):
+                    self.assertAlmostEqual(coeff, answer_tag_classes[index_i][index_j], places=3)
 
 class TestWord(unittest.TestCase):
     def test_get_tags(self):

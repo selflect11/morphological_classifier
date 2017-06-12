@@ -1,7 +1,8 @@
+# -*- coding: iso-8859-1 -*-
 from . import constants
 from . import word_parser
 from . import data_formatter
-from .tools import list_to_float
+from .tools import list_to_float, setup_asciify
 from nltk import stem
 import numpy as np
 import pickle
@@ -17,17 +18,22 @@ class Text:
             if new_word:
                 self.words_list.append(Word(w))
     def read_file(self, filepath):
-        with open(filepath, 'r') as f:
+        with open(filepath, 'r', encoding=constants.ENCODING) as f:
             lines = f.readlines()
             for line in lines:
                 self.add_line(line)
     def load(self, filepath):
-        with open(filepath, 'rb') as f:
+        with open(filepath, 'rb', encoding=constants.ENCODING) as f:
             tmp_dict = pickle.load(f)
         self.__dict__.update(tmp_dict)
     def save(self, filepath):
-        with open(filepath, 'wb') as f:
+        with open(filepath, 'wb', encoding=constants.ENCODING) as f:
             pickle.dump(self.__dict__, f)
+    def get_data(self):
+        # Word -> (wordarr, tagclass)
+        raw_data = [w.get_raw_data() for w in self]
+        word_arrays, tag_classes = zip(*raw_data)
+        return word_arrays, tag_classes
     def write_to_file(self):
         # not sure if necessary
         pass
@@ -38,9 +44,9 @@ class Word:
     def __init__(self, word_plus_tags):
         self.word, self.tag_set = self.word_tag_separate(word_plus_tags)
         if self.tag_set:
-            self.array = WordArray(self.word)
+            self.word_array = WordArray(self.word)
         else:
-            self.array = None
+            self.word_array = None
     def word_tag_separate(self, word_plus_tags):
         word, tags_str = word_plus_tags.split('_')
         tags = TagSet(tags_str)
@@ -54,9 +60,16 @@ class Word:
         radical = stemmer.stem(word_str)
         rest = word_str.split(radical, 1)[1]
         if not rest:
-            print('Couldnt separate word {}'.format(word_str))
+            #print('Couldnt separate word {}'.format(word_str))
             return word_str
+        # cleans words 
         return radical + separator + rest
+    def get_raw_data(self):
+        return self.word_array.array, self.tag_set.tag_class
+    def get_tag_class(self):
+        return self.tag_set.tag_class
+    def get_array(self):
+        return self.word_array.array
     def __eq__(self, other):
         if isinstance(other, Word):
             return (self.word == other.word)
@@ -75,7 +88,7 @@ class WordArray:
         max_binary = list_to_float([1 for each in binary_mask])
         letter_dic = OrderedDict()
         # ascii_lowercase = 'abcdef...xyz'
-        for letter in string.ascii_lowercase:
+        for letter in string.ascii_lowercase + u'ΰαινστϊ':
             letter_dic[letter] = list(binary_mask)
         letter_dic[SEPARATOR] = list(binary_mask)
         # populates letter_dic
@@ -96,7 +109,7 @@ class WordArray:
 class TagSet:
     def __init__(self, tags_string = ''):
         self.tags_list = self.str_to_tags_list(tags_string)
-        self.tag_class = self.get_hybrid_class()
+        self.tag_class = self.get_tag_class()
     def str_to_tags_list(self, tags_string):
         str_list = tags_string.split('+')
         tags_list = []
@@ -105,7 +118,7 @@ class TagSet:
             if new_tag:
                 tags_list.append(new_tag)
         return tags_list
-    def get_hybrid_class(self):
+    def get_tag_class(self):
         if bool(self):
             return sum(tag.tag_class for tag in self.tags_list)
         return np.zeros(4)

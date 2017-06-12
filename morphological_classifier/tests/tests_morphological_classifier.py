@@ -1,7 +1,6 @@
 from .. import data_formatter
 from .. import word_parser
 from .. import constants
-from .. import word
 import numpy as np
 import unittest
 import tempfile
