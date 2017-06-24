@@ -19,12 +19,3 @@ TARGET_CLASSES = [
     ) for j in range(NUM_CLASSES)
 ]
 TAGS_CLASSES = dict(zip(TARGET_TAGS, TARGET_CLASSES))
-
-#ASCII_MAP = {
-#    u'à' : 'a',
-#    u'á' : 'a',
-#    u'é' : 'e',
-#    u'í' : 'i',
-#    u'ó' : 'o',
-#    u'ú' : 'u',
-#}

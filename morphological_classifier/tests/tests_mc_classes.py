@@ -48,11 +48,11 @@ class TestText(unittest.TestCase):
 
 class TestWord(unittest.TestCase):
     def test_get_tags(self):
-        self.assertEqual(Word('Teste_N+V').tag_set, TagSet('N+V'))
-        self.assertEqual(Word('Teste_ADJ+N+V').tag_set, TagSet('N+V+ADJ'))
-        self.assertEqual(Word('Teste_ADJ+N-KS+V').tag_set, TagSet('N+V+ADJ'))
-        self.assertEqual(Word('Teste_ADJ+N-KS+V-DES').tag_set, TagSet('N+V+ADJ'))
-        self.assertEqual(Word('Teste_N+V+TestTag').tag_set, TagSet('N+V'))
+        self.assertEqual(Word('Teste_N+V').tagset, TagSet('N+V'))
+        self.assertEqual(Word('Teste_ADJ+N+V').tagset, TagSet('N+V+ADJ'))
+        self.assertEqual(Word('Teste_ADJ+N-KS+V').tagset, TagSet('N+V+ADJ'))
+        self.assertEqual(Word('Teste_ADJ+N-KS+V-DES').tagset, TagSet('N+V+ADJ'))
+        self.assertEqual(Word('Teste_N+V+TestTag').tagset, TagSet('N+V'))
     def test_bool(self):
         self.assertTrue(Word('Teste_N'))
         self.assertTrue(Word('Teste_N+V'))

@@ -1,27 +1,28 @@
 # -*- coding: iso-8859-1 -*-
 from . import constants
-from . import word_parser
-from . import data_formatter
-from .tools import list_to_float, setup_asciify
+from .tools import list_to_float, separate_word_from_radical, update_progress
 from nltk import stem
 import numpy as np
 import pickle
 import string
-from collections import OrderedDict
+from collections import OrderedDict, Counter
 
 class Text:
     def __init__(self):
         self.words_list = []
+    def read_file(self, filepath):
+        with open(filepath, 'r', encoding=constants.ENCODING) as f:
+            lines = f.readlines()
+            num_lines = len(lines)
+            for line_num, line in enumerate(lines):
+                self.add_line(line)
+                percent_done = line_num/(num_lines - 1)
+                update_progress(percent_done)
     def add_line(self, line):
         for w in line.split(' '):
             new_word = Word(w)
             if new_word:
                 self.words_list.append(Word(w))
-    def read_file(self, filepath):
-        with open(filepath, 'r', encoding=constants.ENCODING) as f:
-            lines = f.readlines()
-            for line in lines:
-                self.add_line(line)
     def load(self, filepath):
         with open(filepath, 'rb', encoding=constants.ENCODING) as f:
             tmp_dict = pickle.load(f)
@@ -31,52 +32,48 @@ class Text:
             pickle.dump(self.__dict__, f)
     def get_data(self):
         # Word -> (wordarr, tagclass)
-        raw_data = [w.get_raw_data() for w in self]
+        raw_data = [word.get_raw_data() for word in self]
         word_arrays, tag_classes = zip(*raw_data)
-        return word_arrays, tag_classes
-    def write_to_file(self):
-        # not sure if necessary
-        pass
+        return np.array(word_arrays), np.array(tag_classes)
+    def get_classes_frequencies(self):
+        tagsets = [word.get_tagset() for word in self]
+        c = Counter(tagsets)
+        total = sum(c.values())
+        freqs = {str(key) : value/total for key, value in c.items()}
+        return freqs
     def __getitem__(self, index):
         return self.words_list[index]
 
 class Word:
     def __init__(self, word_plus_tags):
-        self.word, self.tag_set = self.word_tag_separate(word_plus_tags)
-        if self.tag_set:
+        self.word, self.tagset = self.word_tag_separate(word_plus_tags)
+        if self.tagset:
             self.word_array = WordArray(self.word)
         else:
             self.word_array = None
     def word_tag_separate(self, word_plus_tags):
-        word, tags_str = word_plus_tags.split('_')
-        tags = TagSet(tags_str)
-        separated_word = self.separate_word_from_radical(word)
+        word, *tags_str = word_plus_tags.split('_')
+        if tags_str:
+            tags = TagSet(tags_str[0])
+        else:
+            tags = TagSet()
+        separated_word = separate_word_from_radical(word)
         return separated_word, tags
-    def separate_word_from_radical(self, word_str):
-        # RSLP algorithm
-        separator = constants.SEPARATOR
-        word_str = word_str.lower()
-        stemmer = stem.rslp.RSLPStemmer()
-        radical = stemmer.stem(word_str)
-        rest = word_str.split(radical, 1)[1]
-        if not rest:
-            #print('Couldnt separate word {}'.format(word_str))
-            return word_str
-        # cleans words 
-        return radical + separator + rest
     def get_raw_data(self):
-        return self.word_array.array, self.tag_set.tag_class
+        return self.get_array(), self.get_tag_class()
     def get_tag_class(self):
-        return self.tag_set.tag_class
+        return self.tagset.tag_class
     def get_array(self):
         return self.word_array.array
+    def get_tagset(self):
+        return self.tagset
     def __eq__(self, other):
         if isinstance(other, Word):
             return (self.word == other.word)
         else:
             return (self.word == other)
     def __bool__(self):
-        return bool(self.tag_set)
+        return bool(self.tagset)
     
 class WordArray:
     def __init__(self, separated_word):
@@ -88,12 +85,13 @@ class WordArray:
         max_binary = list_to_float([1 for each in binary_mask])
         letter_dic = OrderedDict()
         # ascii_lowercase = 'abcdef...xyz'
-        for letter in string.ascii_lowercase + u'àáéíóôú':
+        for letter in string.ascii_lowercase + u'àáãéíóôú':
             letter_dic[letter] = list(binary_mask)
         letter_dic[SEPARATOR] = list(binary_mask)
         # populates letter_dic
         for index, letter in enumerate(separated_word):
-            letter_dic[letter][index] = 1 
+            if letter in letter_dic:
+                letter_dic[letter][index] = 1 
         # converts letter_dic to numeric form, also normalizing it
         letter_dic = {letter : list_to_float(vec)/max_binary for letter, vec in letter_dic.items()}
         return letter_dic
@@ -119,19 +117,19 @@ class TagSet:
                 tags_list.append(new_tag)
         return tags_list
     def get_tag_class(self):
-        if bool(self):
+        if self:
             return sum(tag.tag_class for tag in self.tags_list)
         return np.zeros(4)
     def __bool__(self):
-        if self.tags_list:
-            return True
-        return False
+        return bool(self.tags_list)
     def __getitem__(self, index):
         if index > len(self.tags_list):
             raise IndexError('{} index too big'.format(index))
         return self.tags_list[index]
     def __eq__(self, other):
         return (set(self.tags_list) == set(other.tags_list))
+    def __hash__(self):
+        return list_to_float(self.tag_class)
     def __str__(self):
         return ",".join(str(tag) for tag in self)
 
@@ -153,9 +151,7 @@ class Tag:
             return tags_classes[tag]
         return None
     def __bool__(self):
-        if self.tag:
-            return True
-        return False
+        return bool(self.tag)
     def __eq__(self, other):
         if self.tag == other.tag:
             return True
