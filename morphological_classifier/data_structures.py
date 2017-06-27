@@ -24,11 +24,11 @@ class Text:
             if new_word:
                 self.words_list.append(Word(w))
     def load(self, filepath):
-        with open(filepath, 'rb', encoding=constants.ENCODING) as f:
+        with open(filepath, 'rb') as f:
             tmp_dict = pickle.load(f)
         self.__dict__.update(tmp_dict)
     def save(self, filepath):
-        with open(filepath, 'wb', encoding=constants.ENCODING) as f:
+        with open(filepath, 'wb') as f:
             pickle.dump(self.__dict__, f)
     def get_data(self):
         # Word -> (wordarr, tagclass)
@@ -85,7 +85,7 @@ class WordArray:
         max_binary = list_to_float([1 for each in binary_mask])
         letter_dic = OrderedDict()
         # ascii_lowercase = 'abcdef...xyz'
-        for letter in string.ascii_lowercase + u'ΰαγινστϊ':
+        for letter in string.ascii_lowercase + u'ΰαγινστϊη':
             letter_dic[letter] = list(binary_mask)
         letter_dic[SEPARATOR] = list(binary_mask)
         # populates letter_dic
