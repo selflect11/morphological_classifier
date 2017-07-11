@@ -33,9 +33,10 @@ class MorphologicalClassifier:
             self.Model = Model
         self.Text = Text
     def predict(self, word_str):
-        new_word = Word(word_str)
+        new_word = Word(word_str + '_N')
         entry = new_word.get_array()
-        return tags_from_array(self.Model.predict(entry))
+        predicted_array = self.Model.predict(entry.reshape(1,-1))
+        return tags_from_array(predicted_array)
     def plot(self):
         pass
     def get_accuracy(self, n_splits=5):

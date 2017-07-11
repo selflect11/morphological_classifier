@@ -1,7 +1,7 @@
 # -*- coding: iso-8859-1 -*-
 from .. import constants, tools
 from ..data_structures import Text, Word, WordArray, TagSet, Tag
-from ..models import get_closest_class
+from ..models import tags_from_array
 import numpy as np
 import unittest
 
@@ -14,7 +14,7 @@ class TestTools(unittest.TestCase):
                 ]
         for answer, arr in in_out:
             arr = np.array(arr)
-            tryout = get_closest_class(arr)
+            tryout = tags_from_array(arr)
             with self.subTest(tryout = tryout):
                 self.assertEqual(answer, tryout)
     def test_update_progress(self):

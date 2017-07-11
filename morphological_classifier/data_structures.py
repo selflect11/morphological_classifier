@@ -85,7 +85,7 @@ class WordArray:
         max_binary = list_to_float([1 for each in binary_mask])
         letter_dic = OrderedDict()
         # ascii_lowercase = 'abcdef...xyz'
-        for letter in string.ascii_lowercase + u'ΰαγινστϊη':
+        for letter in string.ascii_lowercase + u'ΰαγινστϊ':
             letter_dic[letter] = list(binary_mask)
         letter_dic[SEPARATOR] = list(binary_mask)
         # populates letter_dic
