@@ -13,4 +13,15 @@ class WordTagDictionary:
 #       t1 t22 t31 t4,
 #       t1 t21 t32 t4,
 #       t1 t22 t32 t4)
-#   tag.getProbability()
+#   transition matrix
+#           tag1    tag2    tag3    ...     tagn
+#   tag1    p11     p12     p13     ...     p1n
+#   tag2    p21     p22     p23     ...     p2n
+#   tag3    p31     p32     p33     ...     p3n
+#   ...
+#   tagn    pn1     pn2     pn3     ...     pnn
+#   ==
+#   max(p(t1->t21) * p(t21->t31) * p(t31->t4),
+#       p(t1->t22) * p(t22->t31) * p(t31->t4),
+#       p(t1->t21) * p(t21->t32) * p(t32->t4),
+#       p(t1->t22) * p(t22->t32) * p(t32->t4))
