@@ -1,11 +1,12 @@
 from . import constants
 from nltk import stem
+from itertools import tee
 import sys
 
 def list_to_float(lst):
     # big endian std
     num = 0
-    for index, coeff in enumerate(reversed(lst)):
+    for index, coeff in enumerate(lst):
         num += coeff * (2**index)
     return int(num)
 
@@ -28,6 +29,11 @@ def get_desinence(word, radical):
     if end:
         return end
     return get_desinence(word, radical[:-1])
+
+def pairwise(iterable):
+    a, b = tee(iterable)
+    next(b, None)
+    return zip(a, b)
 
 def update_progress(progress):
     barLength = 30 # Modify this to change the length of the progress bar
