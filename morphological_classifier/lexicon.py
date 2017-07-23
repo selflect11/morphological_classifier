@@ -9,7 +9,64 @@ import pickle
 import string
 import re
 
-# Words are now unique inside this class
+def parseElement(string_element):
+    ''' Parses an element of the form Word_tag1+tag2...|extra_info
+        into a (word, [tag1, tag2,...]) tuple. '''
+    string_element = string_element.lower()
+    # gets rid of extra information elements after the | character
+    string_element = re.sub('\|.*', '', string_element)
+    word, tags_str = string_element.split('-')
+    tags = tags_str.split('+')
+    return word, tags
+
+def tagIsValid(tag):
+    if tag in constants.TAGET_TAGS:
+        return True
+    return False
+
+# Words are unique inside this class
+class WordTag:
+    def __init__(self, filepath):
+        ''' Stores a dictionary of words
+            with their respective set of tags,
+            and all possible tag transition
+            probabilities. '''
+        # { word1 : set(tag1, tag2, ...), ... }
+        self.word_tag_dict = {}
+        self.trans_prob = TransitionProbabilities()
+        self.init_prob = InitialProbabilities()
+        self.setup(filepath)
+
+    def setup(self, source_filepath):
+        self.loadElementsFromFile(source_filepath)
+        self.trans_prob.calculateProbabilities()
+        self.init_prob.calculateProbabilities()
+
+    def loadElementsFromFile(self, filepath):
+        with open(filepath, 'r', encoding=constants.ENCODING) as f:
+            lines = f.readlines()
+            num_lines = len(lines)
+            for line_num, line in enumerate(lines):
+                self.add_line(line)
+                percent_done = line_num/(num_lines - 1)
+                update_progress(percent_done)
+
+    def addLine(self, line):
+        line_tags = []
+        initial_tag = None
+        for element in line.split(' '):
+            word, tags_list = parse_element(element)
+            for tag in tags_list:
+                if tagIsValid(tag):
+                    line_tags.append(tag)
+                    initial_tag == tag if initial_tag is None
+                    if word in self.word_tag_dict:
+                        self.word_tag_dict[word].update(tag)
+                    else:
+                        self.word_tag_dict[word] = set(tag)
+        self.trans_prob.loadTags(line_tags)
+        self.init_prob.loadTag(initial_tag)
+
 class Text:
     def __init__(self, filepath):
         self.word_tag_dict = {}
@@ -17,7 +74,7 @@ class Text:
         num_tags = self.get_num_tags()
         transition_probabilities_dict = initialize_trans_prob_dict()
         initial_probabilities_dict = {}
-    def read_file(self, filepath):
+    def readFile(self, filepath):
         with open(filepath, 'r', encoding=constants.ENCODING) as f:
             lines = f.readlines()
             num_lines = len(lines)
@@ -26,7 +83,7 @@ class Text:
                 percent_done = line_num/(num_lines - 1)
                 update_progress(percent_done)
     # let's change this to get it working...
-    def add_line(self, line):
+    def addLine(self, line):
         for element in line.split(' '):
             word, tags_str = element.split('_')
             # gets rid of extra information elements after the | character
@@ -36,16 +93,16 @@ class Text:
                 self.word_tag_dict[word].update(set(tags))
             else:
                 self.word_tag_dict[word] = set(tags)
-    def get_all_tags(self):
+    def getAllTags(self):
         all_tags = set()
         for word in self.word_tag_dict:
             all_tags.update(self.word_tag_dict[word])
         return all_tags
-    def get_num_tags(self):
+    def getNum_tags(self):
         return len(self.get_all_tags())
-    def update_initial_probabilities(self, line):
+    def updateInitialProbabilities(self, line):
         pass
-    def update_transition_probabilities(self, line):
+    def updateTransitionProbabilities(self, line):
         pass
     def load(self, filepath):
         with open(filepath, 'rb') as f:
@@ -54,12 +111,12 @@ class Text:
     def save(self, filepath):
         with open(filepath, 'wb') as f:
             pickle.dump(self.__dict__, f)
-    def get_data(self):
+    def getData(self):
         # Word -> (wordarr, tagclass)
         raw_data = [word.get_raw_data() for word in self]
         word_arrays, tag_classes = zip(*raw_data)
         return np.array(word_arrays), np.array(tag_classes)
-    def get_classes_frequencies(self):
+    def getClasses_frequencies(self):
         tagsets = [word.get_tagset() for word in self]
         c = Counter(tagsets)
         total = sum(c.values())
@@ -67,11 +124,11 @@ class Text:
         return freqs
     def __getitem__(self, index):
         return self.words_list[index]
-    def initialize_trans_prob_dict():
+    def initializeTrans_prob_dict():
         all_tags = constant.TARGET_TAGS
         transitions = itertools.product(all_tags, all_tags)
         return {trans : 0 for trans in transitions}
-    def initialize_init_prob_dict():
+    def initializeInit_prob_dict():
         all_tags = constant.TARGET_TAGS
         return {tag : 0 for tag in all_tags}
 
@@ -82,7 +139,7 @@ class Word:
             self.word_array = WordArray(self.word)
         else:
             self.word_array = None
-    def word_tag_separate(self, word_plus_tags):
+    def wordTag_separate(self, word_plus_tags):
         word, *tags_str = word_plus_tags.split('_')
         if tags_str:
             tags = TagSet(tags_str[0])
@@ -90,13 +147,13 @@ class Word:
             tags = TagSet()
         separated_word = separate_word_from_radical(word)
         return separated_word, tags
-    def get_raw_data(self):
+    def getRaw_data(self):
         return self.get_array(), self.get_tag_class()
-    def get_tag_class(self):
+    def getTag_class(self):
         return self.tagset.tag_class
-    def get_array(self):
+    def getArray(self):
         return self.word_array.array
-    def get_tagset(self):
+    def getTagset(self):
         return self.tagset
     def __eq__(self, other):
         if isinstance(other, Word):
@@ -110,7 +167,7 @@ class WordArray:
     def __init__(self, separated_word):
         self.letter_dic = self.string_to_dic(separated_word)
         self.array = self.dic_to_array(self.letter_dic)
-    def string_to_dic(self, separated_word):
+    def stringTo_dic(self, separated_word):
         SEPARATOR = constants.SEPARATOR
         binary_mask = [0 for each in range(len(separated_word))]
         max_binary = list_to_float([1 for each in binary_mask])
@@ -126,7 +183,7 @@ class WordArray:
         # converts letter_dic to numeric form, also normalizing it
         letter_dic = {letter : list_to_float(vec)/max_binary for letter, vec in letter_dic.items()}
         return letter_dic
-    def dic_to_array(self, dic):
+    def dicTo_array(self, dic):
         return np.array(list(dic.values()), dtype=constants.D_TYPE)
     def __getitem__(self, key):
         if key not in self.letter_dic:
@@ -139,7 +196,7 @@ class TagSet:
     def __init__(self, tags_string = ''):
         self.tags_list = self.str_to_tags_list(tags_string)
         self.tag_class = self.get_tag_class()
-    def str_to_tags_list(self, tags_string):
+    def strTo_tags_list(self, tags_string):
         str_list = tags_string.split('+')
         tags_list = []
         for t in str_list:
@@ -147,9 +204,9 @@ class TagSet:
             if new_tag:
                 tags_list.append(new_tag)
         return tags_list
-    def get_tags(self):
+    def getTags(self):
         return self.tags_list
-    def get_tag_class(self):
+    def getTag_class(self):
         if self:
             return sum(tag.tag_class for tag in self.tags_list)
         return np.zeros(4)
@@ -170,7 +227,7 @@ class Tag:
     def __init__(self, tag_string):
         self.tag = self.tag_strip(tag_string)
         self.tag_class = self.tag_to_class(self.tag)
-    def tag_strip(self, tag_string):
+    def tagStrip(self, tag_string):
         target_tags = constants.TARGET_TAGS
         for tt in target_tags:
             # If the tag is composite, strip it
@@ -178,7 +235,7 @@ class Tag:
             if tt == tag_string.split('-')[0]:
                 return tt
         return None
-    def tag_to_class(self, tag):
+    def tagToClass(self, tag):
         tags_classes = constants.TAGS_CLASSES
         if tag in tags_classes:
             return tags_classes[tag]
