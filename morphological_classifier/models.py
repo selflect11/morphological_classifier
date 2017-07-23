@@ -19,12 +19,6 @@ def load_text(data_filepath):
         pickle.dump(txt.__dict__, f)
     return txt
 
-# for model in models:
-    # classifier = MorphologicalClassifier(model)
-    # classifier.load_text(paf)
-    # classifier.train()
-    # classifier.test()
-
 class MorphologicalClassifier:
     def __init__(self, Text, Model=None):
         if not Model:

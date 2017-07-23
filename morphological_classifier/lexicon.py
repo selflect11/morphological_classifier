@@ -1,15 +1,22 @@
 # -*- coding: iso-8859-1 -*-
 from . import constants
-from .tools import list_to_float, separate_word_from_radical, update_progress
+from .tools import list_to_float, separate_word_from_radical, update_progress, pairwise
 from nltk import stem
+from collections import OrderedDict, Counter
+import itertools
 import numpy as np
 import pickle
 import string
-from collections import OrderedDict, Counter
+import re
 
+# Words are now unique inside this class
 class Text:
-    def __init__(self, phrase_container=[]):
-        self.words_list = phrase_container
+    def __init__(self, filepath):
+        self.word_tag_dict = {}
+        self.read_file(filepath)
+        num_tags = self.get_num_tags()
+        transition_probabilities_dict = initialize_trans_prob_dict()
+        initial_probabilities_dict = {}
     def read_file(self, filepath):
         with open(filepath, 'r', encoding=constants.ENCODING) as f:
             lines = f.readlines()
@@ -18,11 +25,28 @@ class Text:
                 self.add_line(line)
                 percent_done = line_num/(num_lines - 1)
                 update_progress(percent_done)
+    # let's change this to get it working...
     def add_line(self, line):
-        for w in line.split(' '):
-            new_word = Word(w)
-            if new_word:
-                self.words_list.append(Word(w))
+        for element in line.split(' '):
+            word, tags_str = element.split('_')
+            # gets rid of extra information elements after the | character
+            tags_str = re.sub('\|.*', '', tags_str)
+            tags = tags_str.split('+')
+            if word in self.word_tag_dict:
+                self.word_tag_dict[word].update(set(tags))
+            else:
+                self.word_tag_dict[word] = set(tags)
+    def get_all_tags(self):
+        all_tags = set()
+        for word in self.word_tag_dict:
+            all_tags.update(self.word_tag_dict[word])
+        return all_tags
+    def get_num_tags(self):
+        return len(self.get_all_tags())
+    def update_initial_probabilities(self, line):
+        pass
+    def update_transition_probabilities(self, line):
+        pass
     def load(self, filepath):
         with open(filepath, 'rb') as f:
             tmp_dict = pickle.load(f)
@@ -43,6 +67,13 @@ class Text:
         return freqs
     def __getitem__(self, index):
         return self.words_list[index]
+    def initialize_trans_prob_dict():
+        all_tags = constant.TARGET_TAGS
+        transitions = itertools.product(all_tags, all_tags)
+        return {trans : 0 for trans in transitions}
+    def initialize_init_prob_dict():
+        all_tags = constant.TARGET_TAGS
+        return {tag : 0 for tag in all_tags}
 
 class Word:
     def __init__(self, word_plus_tags):
@@ -74,7 +105,7 @@ class Word:
             return (self.word == other)
     def __bool__(self):
         return bool(self.tagset)
-    
+
 class WordArray:
     def __init__(self, separated_word):
         self.letter_dic = self.string_to_dic(separated_word)
@@ -91,7 +122,7 @@ class WordArray:
         # populates letter_dic
         for index, letter in enumerate(separated_word):
             if letter in letter_dic:
-                letter_dic[letter][index] = 1 
+                letter_dic[letter][index] = 1
         # converts letter_dic to numeric form, also normalizing it
         letter_dic = {letter : list_to_float(vec)/max_binary for letter, vec in letter_dic.items()}
         return letter_dic
@@ -116,6 +147,8 @@ class TagSet:
             if new_tag:
                 tags_list.append(new_tag)
         return tags_list
+    def get_tags(self):
+        return self.tags_list
     def get_tag_class(self):
         if self:
             return sum(tag.tag_class for tag in self.tags_list)

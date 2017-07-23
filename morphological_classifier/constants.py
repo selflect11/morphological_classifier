@@ -4,11 +4,25 @@ DEBUGGING = True
 D_TYPE = 'float64'
 ENCODING = 'iso-8859-1'
 SEPARATOR = '$'
+# deprecated: starting from this line
 TARGET_TAGS = [
+    'ART',
     'ADJ',
-    'ADV',
-    'V',
     'N',
+    'NPROP',
+    'NUM',
+    'PROADJ',
+    'PROSUB',
+    'PROPESS',
+    'ADV',
+    'KC',
+    'KS',
+    'PREP',
+    'IN',
+    'V',
+    'VAUX',
+    'PCP',
+    'PDEN',
 ]
 NUM_CLASSES = len(TARGET_TAGS)
 # TARGET_CLASSES = [ [1,0,0,0], [0,1,0,0],... ]

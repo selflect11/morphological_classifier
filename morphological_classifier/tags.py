@@ -1,7 +1,14 @@
+# -*- coding: iso-8859-1 -*-
 #   Mines the data for statistics on tags and (word : {tags}) pairs
 
 class WordTagDictionary:
-    def __init__(self):
+    def __init__(self, filepath):
+        pass
+    def getAllTags(self):
+        pass
+    def getTag(self, word):
+        pass
+    def getTransitionProbability(self, tag_list):
         pass
 
 #   w1 w2 w3 w4
