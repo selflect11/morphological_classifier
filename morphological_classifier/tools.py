@@ -3,37 +3,15 @@ from nltk import stem
 from itertools import tee
 import sys
 
-def list_to_float(lst):
-    # big endian std
-    num = 0
-    for index, coeff in enumerate(lst):
-        num += coeff * (2**index)
-    return int(num)
-
-def separate_word_from_radical(word_str):
-        # RSLP algorithm
-        separator = constants.SEPARATOR
-        word_str = word_str.lower()
-        stemmer = stem.rslp.RSLPStemmer()
-        radical = stemmer.stem(word_str)
-        rest = get_desinence(word_str, radical)
-        if not rest:
-            #print('Couldnt separate word {}'.format(word_str))
-            return word_str
-        return radical + separator + rest
-
-def get_desinence(word, radical):
-    if not radical:
-        return word
-    start, mid, end = word.partition(radical)
-    if end:
-        return end
-    return get_desinence(word, radical[:-1])
-
 def pairwise(iterable):
     a, b = tee(iterable)
     next(b, None)
     return zip(a, b)
+
+def safe_division(a, b):
+    if b == 0:
+        return 0
+    return a/b
 
 def update_progress(progress):
     barLength = 30 # Modify this to change the length of the progress bar

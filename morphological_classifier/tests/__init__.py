@@ -1,1 +1,1 @@
-from . import tests_mc_classes, tests_models
+from . import tests_markov, tests_wordtag
