@@ -2,16 +2,16 @@
 from . import constants
 from .tools import update_progress, pairwise
 from .markov_chain import TransitionProbabilities, InitialProbabilities
+from collections import defaultdict
 import itertools
 import re
 
 def parse_word_tag(string_element):
     ''' Parses an element of the form Word_tag1+tag2...|extra_info
         into a (word, [tag1, tag2,...]) tuple. '''
-    # gets rid of extra information elements after the | character
-    string_element = re.sub('\|.*', '', string_element)
     word, tags_str = string_element.split('_')
-    tags = tags_str.split('+')
+    # Gets rid of extra information elements after the - character
+    tags = [re.sub('-.*', '', tag) for tag in tags_str.split('+')]
     return word.lower(), tags
 
 def tag_is_valid(tag):
@@ -27,7 +27,7 @@ class WordTags:
             and all possible tag transition
             probabilities. '''
         # { word1 : set(tag1, tag2, ...), ... }
-        self.word_tag_dict = {}
+        self.word_tag_dict = defaultdict(set)
         self.trans_prob = TransitionProbabilities()
         self.init_prob = InitialProbabilities()
         self.setup(filepath)
@@ -43,7 +43,7 @@ class WordTags:
             num_lines = len(lines)
             for line_num, line in enumerate(lines):
                 self.add_line(line)
-                percent_done = line_num/(num_lines - 1)
+                percent_done = (line_num + 1)/num_lines
                 update_progress(percent_done)
 
     def add_line(self, line):
@@ -56,12 +56,18 @@ class WordTags:
                     line_tags.append(tag)
                     if initial_tag is None:
                         initial_tag = tag
-                    if word in self.word_tag_dict:
-                        self.word_tag_dict[word].update([tag])
-                    else:
-                        self.word_tag_dict[word] = set([tag])
+                    self.word_tag_dict[word].update([tag])
         self.trans_prob.add_transitions(line_tags)
         self.init_prob.add_tag(initial_tag)
 
+    def get_transition_probability(self, transition):
+        return self.trans_prob[transition]
+
+    def get_initial_probability(self, tag):
+        return self.init_prob[tag]
+
     def __getitem__(self, tag):
         return self.word_tag_dict[tag]
+
+    def __contains__(self, tag):
+        return (tag in self.word_tag_dict)

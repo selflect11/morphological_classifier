@@ -13,8 +13,14 @@ class ProbabilityMatrix:
     def update_count(self, entry):
         self.probabilities_dict[entry] += 1
 
+    def items(self):
+        return self.probabilities_dict.items()
+
     def __getitem__(self, entry):
         return self.probabilities_dict[entry]
+
+    def __repr__(self):
+        return self.probabilities_dict.__repr__()
 
 
 class TransitionProbabilities(ProbabilityMatrix):

@@ -1,0 +1,10 @@
+# Byte compiled / optimized
+morphological_classifier/__pycache__/
+*.pyc
+*.pyo
+
+# Distribution / packaging
+morphological_classifier/*.egg_info/
+morphological_classifier/eggs
+morphological_classifier/develop-eggs
+morphological_classifier/*.egg
