@@ -1,8 +1,6 @@
 DEBUGGING = True        # unused
-DICT_TYPE = ''
 NUM_TYPE = 'float64'
 ENCODING = 'utf-8'
-SEPARATOR = '$'
 TARGET_TAGS = [
     'ART',
     'ADJ',
