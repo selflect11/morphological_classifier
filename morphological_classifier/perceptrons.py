@@ -1,9 +1,10 @@
 # -*- coding: utf-8 -*-
 import random
 from collections import defaultdict
+from morphological_classifier import utils
 
 
-class AveragedPerceptron(object):
+class AveragedPerceptron:
     def __init__(self):
         # Each feature gets its own weight vector, so weights is a dict-of-dicts
         self.weights = {}
@@ -118,9 +119,12 @@ class PerceptronTagger:
         self._make_tagdict(sentences)
         self.model.tags = self.tags
         for iter_ in range(nr_iter):
-            for sentence in self._sentences:
+            num_sentences = len(self._sentences)
+            for curr_sentence, sentence in enumerate(self._sentences):
                 if not sentence:
                     continue
+                utils.update_progress((curr_sentence + 1)/num_sentences)
+
                 words, tags = zip(*sentence)
                 prev, prev2 = self.START
                 context = self.START + [self.normalize(w) for w in words] + self.END
