@@ -119,6 +119,8 @@ class PerceptronTagger:
         self.model.tags = self.tags
         for iter_ in range(nr_iter):
             for sentence in self._sentences:
+                if not sentence:
+                    continue
                 words, tags = zip(*sentence)
                 prev, prev2 = self.START
                 context = self.START + [self.normalize(w) for w in words] + self.END
@@ -180,23 +182,23 @@ class PerceptronTagger:
         add('i+2 word', context[i+2])
         return features
 
-        def _make_tagdict(self, sentences):
-            '''
-            Make a tag dictionary for single-tag words.
-            :param sentences: A list of list of (word, tag) tuples.
-            '''
-            counts = defaultdict(lambda: defaultdict(int))
-            for sentence in sentences:
-                self._sentences.append(sentence)
-                for word, tag in sentence:
-                    counts[word][tag] += 1
-                    self.tags.add(tag)
-            freq_thresh = 20
-            ambiguity_thresh = 0.97
-            for word, tag_freqs in counts.items():
-                tag, mode = max(tag_freqs.items(), key=lambda item: item[1])
-                n = sum(tag_freqs.values())
-                # Don't add rare words to the tag dictionary
-                # Only add quite unambiguous words
-                if n >= freq_thresh and (mode / n) >= ambiguity_thresh:
-                    self.tagdict[word] = tag
+    def _make_tagdict(self, sentences):
+        '''
+        Make a tag dictionary for single-tag words.
+        :param sentences: A list of list of (word, tag) tuples.
+        '''
+        counts = defaultdict(lambda: defaultdict(int))
+        for sentence in sentences:
+            self._sentences.append(sentence)
+            for word, tag in sentence:
+                counts[word][tag] += 1
+                self.tags.add(tag)
+        freq_thresh = 20
+        ambiguity_thresh = 0.97
+        for word, tag_freqs in counts.items():
+            tag, mode = max(tag_freqs.items(), key=lambda item: item[1])
+            n = sum(tag_freqs.values())
+            # Don't add rare words to the tag dictionary
+            # Only add quite unambiguous words
+            if n >= freq_thresh and (mode / n) >= ambiguity_thresh:
+                self.tagdict[word] = tag
