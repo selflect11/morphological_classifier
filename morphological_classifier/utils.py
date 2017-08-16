@@ -1,5 +1,10 @@
 import sys
 
+def safe_division(a, b):
+    if b == 0:
+        return 0
+    return a/b
+
 def update_progress(progress):
     barLength = 30 # Modify this to change the length of the progress bar
     status = ""

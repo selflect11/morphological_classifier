@@ -2,7 +2,6 @@
 import random
 from collections import defaultdict
 from morphological_classifier import utils
-import pickle
 
 
 class AveragedPerceptron:
@@ -20,9 +19,6 @@ class AveragedPerceptron:
         self._tstamps = defaultdict(int)
         # Number of instances seen
         self.i = 0
-
-    def get_tags(self):
-        return self.tags
 
     def predict(self, features):
         '''Dot-product the features and current weights and return the best label.'''
@@ -222,14 +218,8 @@ class PerceptronTagger:
             if n >= freq_thresh and (mode / n) >= ambiguity_thresh:
                 self.tagdict[word] = tag
 
-    def get_tags(self):
-        return self.model.get_tags()
-
     def erase_useless(self):
         self.model.erase_useless()
 
     def save(self, filepath):
         self.model.save(filepath)
-
-    def load(self, filepath):
-        self.model.load(filepath)
