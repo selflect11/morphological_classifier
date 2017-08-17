@@ -1,19 +1,20 @@
 # -*- coding: utf-8 -*-
 import re
 import pickle
+from collections import defaultdict
 from morphological_classifier import constants, utils
 
 def parse_word_tag(string_element):
     ''' Parses an element of the form Word_tag1+tag2...|extra_info
-    into a (word, [tag1, tag2,...]) tuple. '''
+    into a (word, tags) tuple. '''
     word, tags_str = string_element.split('_')
-    # Gets rid of extra information elements after the - character
-    tags = [re.sub('-.*', '', tag) for tag in tags_str.split('+')]
-    # Returns the first tag because the current classifier cant handle more than one tag per word
-    return word.lower(), tags[0]
+    ## Gets rid of extra information elements after the - character
+    #tags = [re.sub('-.*', '', tag) for tag in tags_str.split('+')]
+    ## Returns the first tag because the current classifier cant handle more than one tag per word
+    return word.lower(), tags_str
 
 def parse_sentence(sentence):
-    '''Gets "Word1_tag1 word2_tag2 word3_tag3..."
+    ''' Gets "Word1_tag1 word2_tag2 word3_tag3..."
         returns [("word1", "tag1"), ("word2", "tag2"), ...]
     '''
     parsed_sentence = []
@@ -30,19 +31,16 @@ class MorphologicalClassifier:
     def predict(self, phrase):
         return self.tagger.tag(phrase.split())
 
-    def get_tags(self):
-        return self.tagger.get_tags()
-
     def save(self, filepath):
-        self.erase_useless()
+        self.erase_useless_data()
         self.tagger.save(filepath)
 
     def load(self, filepath):
         self.tagger.load(filepath)
         self.isTrained = True
 
-    def erase_useless(self):
-        self.tagger.erase_useless()
+    def erase_useless_data(self):
+        self.tagger.erase_useless_data()
 
     def train(self, filepath):
         if self.isTrained:
@@ -69,9 +67,9 @@ class MorphologicalClassifier:
         # Metric variables
         total_accuracy = 0
         num_sentences = len(parsed_sentences)
-        tag_hit_count = {
-            tag: {'right': 0, 'total': 0} for tag in self.get_tags()
-            }
+        tag_hit_count = defaultdict(
+            lambda: {'right': 0, 'total': 0}
+            )
 
         for sent_num, sentence in enumerate(parsed_sentences):
             utils.update_progress((sent_num + 1)/num_sentences)

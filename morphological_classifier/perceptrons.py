@@ -4,12 +4,15 @@ from collections import defaultdict
 from morphological_classifier import utils
 import pickle
 
+def def_dict_float():   #only needed for dumbass serialization
+    return defaultdict(float)
+
 
 class AveragedPerceptron:
     def __init__(self):
         # Each feature gets its own weight vector, so weights is a dict-of-dicts
-        # self.weights[feature] := { tag1: w1, tag2: w2, ...}
-        self.weights = {}
+        # self.weights[feature] := {tag1: w1, tag2: w2, ...}
+        self.weights = defaultdict(def_dict_float)
         self.tags = set()
         # The accumulated values, for the averaging. These will be keyed by
         # feature/tag tuples
@@ -20,9 +23,7 @@ class AveragedPerceptron:
         self._tstamps = defaultdict(int)
         # Number of instances seen
         self.i = 0
-
-    def get_tags(self):
-        return self.tags
+        #
 
     def predict(self, features):
         '''Dot-product the features and current weights and return the best label.'''
@@ -38,20 +39,20 @@ class AveragedPerceptron:
 
     def update(self, true_value, guess, features):
         '''Update the feature weights.'''
-        def upd_feat(guess, feature, w, v):
-            param = (feature, guess)
-            self._totals[param] += (self.i - self._tstamps[param]) * w
+        def upd_feat(feature, tag, val):
+            param = (feature, tag)
+            curr_weight = self.weights[feature][tag]
+            self._totals[param] += (self.i - self._tstamps[param]) * curr_weight
             self._tstamps[param] = self.i
-            self.weights[feature][guess] = w + v
+            self.weights[feature][tag] += val
 
         self.i += 1
         if true_value == guess:
             return
         else:
             for feature in features:
-                weights = self.weights.setdefault(feature, {})
-                upd_feat(true_value, feature, weights.get(true_value, 0.0), 1.0)
-                upd_feat(guess, feature, weights.get(guess, 0.0), -1.0)
+                upd_feat(feature, true_value, 1.0)
+                upd_feat(feature, guess, -1.0)
 
     def average_weights(self):
         '''Average weights from all iterations.'''
@@ -66,7 +67,7 @@ class AveragedPerceptron:
                     new_feat_weights[tag] = averaged
             self.weights[feat] = new_feat_weights
 
-    def erase_useless(self):
+    def erase_useless_data(self):
         self._totals = self._tstamps = self.i = None
 
     def save(self, filepath):
@@ -79,8 +80,7 @@ class AveragedPerceptron:
 
 
 class PerceptronTagger:
-    '''
-    Greedy Averaged Perceptron tagger
+    '''Greedy Averaged Perceptron tagger
 
     >>> from nltk.tag.perceptron import PerceptronTagger
     Train the model
@@ -91,8 +91,7 @@ class PerceptronTagger:
     ... [('yes','NNS'),('it','PRP'),('beautiful','JJ')]])
 
     >>> tagger.tag(['today','is','a','beautiful','day'])
-    [('today', 'NN'), ('is', 'PRP'), ('a', 'PRP'), ('beautiful', 'JJ'), ('day', 'NN')]
-    '''
+    [('today', 'NN'), ('is', 'PRP'), ('a', 'PRP'), ('beautiful', 'JJ'), ('day', 'NN')]'''
 
     START = ['-START-', '-START2-']
     END = ['-END-', '-END2-']
@@ -121,8 +120,7 @@ class PerceptronTagger:
         training iterations.
         :param sentences: A list or iterator of sentences, where each sentence
             is a list of (words, tags) tuples.
-        :param nr_iter: Number of training iterations.
-        '''
+        :param nr_iter: Number of training iterations.'''
         # We'd like to allow sentences to be either a list or an iterator,
         # the latter being especially important for a large training dataset.
         # Because self._make_tagdict(sentences) runs regardless, we make
@@ -158,16 +156,11 @@ class PerceptronTagger:
         self.model.average_weights()
 
     def normalize(self, word):
-        '''
-        Normalization used in pre-processing.
+        '''Normalization used in pre-processing.
         - All words are lower cased
-        - Groups of digits of length 4 are represented as !YEAR;
-        - Other digits are represented as !DIGITS
-        :rtype: str
-        '''
-        if '-' in word and word[0] != '-':
-            return '!HYPHEN'
-        elif word.isdigit() and len(word) == 4:
+        - Groups of digits of length 4 are represented as !YEAR
+        - Other digits are represented as !DIGITS'''
+        if word.isdigit() and len(word) == 4:
             return '!YEAR'
         elif word[0].isdigit():
             return '!DIGITS'
@@ -177,8 +170,7 @@ class PerceptronTagger:
     def _get_features(self, i, word, context, prev, prev2):
         '''Map tokens into a feature representation, implemented as a
         {hashable: int} dict. If the features change, a new model must be
-        trained.
-        '''
+        trained.'''
         def add(name, *args):
             features[' '.join((name,) + tuple(args))] += 1
 
@@ -202,10 +194,8 @@ class PerceptronTagger:
         return features
 
     def _make_tagdict(self, sentences):
-        '''
-        Make a tag dictionary for single-tag words.
-        :param sentences: A list of list of (word, tag) tuples.
-        '''
+        '''Make a tag dictionary for single-tag words.
+        :param sentences: A list of list of (word, tag) tuples.'''
         counts = defaultdict(lambda: defaultdict(int))
         for sentence in sentences:
             self._sentences.append(sentence)
@@ -222,11 +212,8 @@ class PerceptronTagger:
             if n >= freq_thresh and (mode / n) >= ambiguity_thresh:
                 self.tagdict[word] = tag
 
-    def get_tags(self):
-        return self.model.get_tags()
-
-    def erase_useless(self):
-        self.model.erase_useless()
+    def erase_useless_data(self):
+        self.model.erase_useless_data()
 
     def save(self, filepath):
         self.model.save(filepath)
