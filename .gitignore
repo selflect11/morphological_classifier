@@ -2,6 +2,7 @@
 morphological_classifier/__pycache__/
 *.pyc
 *.pyo
+*.p
 
 # Distribution / packaging
 morphological_classifier/*.egg_info/
