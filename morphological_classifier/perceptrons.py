@@ -1,10 +1,10 @@
 # -*- coding: utf-8 -*-
 import random
 from collections import defaultdict
-from morphological_classifier import utils
 import pickle
+from morphological_classifier import utils
 
-def def_dict_float():   #only needed for dumbass serialization
+def defaultdict_float():                   #only needed for dumbass serialization
     return defaultdict(float)
 
 
@@ -12,7 +12,7 @@ class AveragedPerceptron:
     def __init__(self):
         # Each feature gets its own weight vector, so weights is a dict-of-dicts
         # self.weights[feature] := {tag1: w1, tag2: w2, ...}
-        self.weights = defaultdict(def_dict_float)
+        self.weights = defaultdict(defaultdict_float)
         self.tags = set()
         # The accumulated values, for the averaging. These will be keyed by
         # feature/tag tuples
@@ -23,7 +23,6 @@ class AveragedPerceptron:
         self._tstamps = defaultdict(int)
         # Number of instances seen
         self.i = 0
-        #
 
     def predict(self, features):
         '''Dot-product the features and current weights and return the best label.'''
@@ -31,27 +30,28 @@ class AveragedPerceptron:
         for feat, value in features.items():
             if feat not in self.weights or value == 0:
                 continue
-            weights = self.weights[feat]
-            for label, weight in weights.items():
-                scores[label] += value * weight
-        # Do a secondary alphabetic sort, for stability
-        return max(self.tags, key=lambda label: (scores[label], label))
+            tag_weight_dict = self.weights[feat]
+            for tag, weight in tag_weight_dict.items():
+                scores[tag] += value * weight
+        return max(self.tags, key=lambda tag: scores[tag])
 
-    def update(self, true_value, guess, features):
+    def update(self, features, true_tag, guess):
         '''Update the feature weights.'''
         def upd_feat(feature, tag, val):
             param = (feature, tag)
+            # If weight doesn't exist, it's initialized as 0.0
+            # Courtesy of defaultdict
             curr_weight = self.weights[feature][tag]
             self._totals[param] += (self.i - self._tstamps[param]) * curr_weight
             self._tstamps[param] = self.i
             self.weights[feature][tag] += val
 
         self.i += 1
-        if true_value == guess:
+        if true_tag == guess:
             return
         else:
             for feature in features:
-                upd_feat(feature, true_value, 1.0)
+                upd_feat(feature, true_tag, 1.0)
                 upd_feat(feature, guess, -1.0)
 
     def average_weights(self):
@@ -68,6 +68,7 @@ class AveragedPerceptron:
             self.weights[feat] = new_feat_weights
 
     def erase_useless_data(self):
+        # for pickling
         self._totals = self._tstamps = self.i = None
 
     def save(self, filepath):
@@ -80,19 +81,10 @@ class AveragedPerceptron:
 
 
 class PerceptronTagger:
-    '''Greedy Averaged Perceptron tagger
+    '''Greedy Averaged Perceptron tagger'''
 
-    >>> from nltk.tag.perceptron import PerceptronTagger
-    Train the model
-
-    >>> tagger = PerceptronTagger(load=False)
-
-    >>> tagger.train([[('today','NN'),('is','VBZ'),('good','JJ'),('day','NN')],
-    ... [('yes','NNS'),('it','PRP'),('beautiful','JJ')]])
-
-    >>> tagger.tag(['today','is','a','beautiful','day'])
-    [('today', 'NN'), ('is', 'PRP'), ('a', 'PRP'), ('beautiful', 'JJ'), ('day', 'NN')]'''
-
+    # Tags used for padding, since the context uses
+    # two words before and after the current word
     START = ['-START-', '-START2-']
     END = ['-END-', '-END2-']
 
@@ -101,11 +93,11 @@ class PerceptronTagger:
         self.tagdict = {}
         self.tags = set()
 
-    def tag(self, tokens):
+    def tag(self, words):
         prev, prev2 = self.START
         output = []
-        context = self.START + [self.normalize(w) for w in tokens] + self.END
-        for i, word in enumerate(tokens):
+        context = self.START + [self.normalize(w) for w in words] + self.END
+        for i, word in enumerate(words):
             tag = self.tagdict.get(word)
             if not tag:
                 features = self._get_features(i, word, context, prev, prev2)
@@ -116,19 +108,11 @@ class PerceptronTagger:
         return output
 
     def train(self, sentences, nr_iter=5):
-        '''Train a model from sentences. nr_iter controls the number of Perceptron
-        training iterations.
-        :param sentences: A list or iterator of sentences, where each sentence
+        ''':param sentences: A list or iterator of sentences, where each sentence
             is a list of (words, tags) tuples.
-        :param nr_iter: Number of training iterations.'''
-        # We'd like to allow sentences to be either a list or an iterator,
-        # the latter being especially important for a large training dataset.
-        # Because self._make_tagdict(sentences) runs regardless, we make
-        # it populate self._sentences (a list) with all the sentences.
-        # This saves the overheard of just iterating through sentences to
-        # get the list by sentences = list(sentences).
+            :param nr_iter: Number of training iterations.'''
 
-        self._sentences = list()  # to be populated by self._make_tagdict...
+        self._sentences = list()            # to be populated by self._make_tagdict...
         self._make_tagdict(sentences)
         self.model.tags = self.tags
         for iter_ in range(nr_iter):
@@ -146,7 +130,7 @@ class PerceptronTagger:
                     if not guess:
                         feats = self._get_features(i, word, context, prev, prev2)
                         guess = self.model.predict(feats)
-                        self.model.update(tags[i], guess, feats)
+                        self.model.update(feats, tags[i], guess)
                     prev2 = prev
                     prev = guess
             random.shuffle(self._sentences)
@@ -158,25 +142,19 @@ class PerceptronTagger:
     def normalize(self, word):
         '''Normalization used in pre-processing.
         - All words are lower cased
-        - Groups of digits of length 4 are represented as !YEAR
-        - Other digits are represented as !DIGITS'''
-        if word.isdigit() and len(word) == 4:
-            return '!YEAR'
-        elif word[0].isdigit():
-            return '!DIGITS'
+        - All numeric words are returned as !DIGITS'''
+        if word.isdigit():
+                return '!DIGITS'
         else:
-            return word.lower()
+                return word.lower()
 
     def _get_features(self, i, word, context, prev, prev2):
-        '''Map tokens into a feature representation, implemented as a
-        {hashable: int} dict. If the features change, a new model must be
-        trained.'''
+        '''Map words into a feature representation.'''
         def add(name, *args):
-            features[' '.join((name,) + tuple(args))] += 1
+            features[str.join(' ', (name,) + tuple(args))] += 1
 
         i += len(self.START)
         features = defaultdict(int)
-        # It's useful to have a constant feature, which acts sort of like a prior
         add('bias')
         add('i suffix', word[-3:])
         add('i pref1', word[0])
