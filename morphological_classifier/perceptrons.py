@@ -4,22 +4,18 @@ from collections import defaultdict
 import pickle
 from morphological_classifier import utils
 
-def defaultdict_float():                   #only needed for dumbass serialization
-    return defaultdict(float)
-
 
 class AveragedPerceptron:
     def __init__(self):
         # Each feature gets its own weight vector, so weights is a dict-of-dicts
         # self.weights[feature] := {tag1: w1, tag2: w2, ...}
-        self.weights = defaultdict(defaultdict_float)
+        self.weights = defaultdict(utils.defaultdict_float)
         self.tags = set()
         # The accumulated values, for the averaging. These will be keyed by
         # feature/tag tuples
         self._totals = defaultdict(int)
         # The last time the feature was changed, for the averaging. Also
         # keyed by feature/tag tuples
-        # (tstamps is short for timestamps)
         self._tstamps = defaultdict(int)
         # Number of instances seen
         self.i = 0
@@ -39,13 +35,12 @@ class AveragedPerceptron:
         '''Update the feature weights.'''
         def upd_feat(feature, tag, val):
             param = (feature, tag)
-            # If weight doesn't exist, it's initialized as 0.0
+            # If the weight doesn't exist, it's initialized as 0.0
             # Courtesy of defaultdict
             curr_weight = self.weights[feature][tag]
             self._totals[param] += (self.i - self._tstamps[param]) * curr_weight
             self._tstamps[param] = self.i
             self.weights[feature][tag] += val
-
         self.i += 1
         if true_tag == guess:
             return
@@ -68,8 +63,11 @@ class AveragedPerceptron:
             self.weights[feat] = new_feat_weights
 
     def erase_useless_data(self):
-        # for pickling
-        self._totals = self._tstamps = self.i = None
+        # Used after training, for pickling
+        self._sentences = None
+        self._totals = None
+        self._tstamps = None
+        self.i = None
 
     def save(self, filepath):
         with open(filepath, 'wb') as f:
@@ -82,11 +80,10 @@ class AveragedPerceptron:
 
 class PerceptronTagger:
     '''Greedy Averaged Perceptron tagger'''
-
     # Tags used for padding, since the context uses
     # two words before and after the current word
-    START = ['-START-', '-START2-']
-    END = ['-END-', '-END2-']
+    START = ['__START__', '__START2__']
+    END = ['__END__', '__END2__']
 
     def __init__(self):
         self.model = AveragedPerceptron()
@@ -94,17 +91,16 @@ class PerceptronTagger:
         self.tags = set()
 
     def tag(self, words):
-        prev, prev2 = self.START
+        ''':type words: list(str)'''
         output = []
-        context = self.START + [self.normalize(w) for w in words] + self.END
+        tags = []
         for i, word in enumerate(words):
             tag = self.tagdict.get(word)
             if not tag:
-                features = self._get_features(i, word, context, prev, prev2)
+                features = self._get_features(words, tags, i)
                 tag = self.model.predict(features)
             output.append((word, tag))
-            prev2 = prev
-            prev = tag
+            tags.append(tag)
         return output
 
     def train(self, sentences, nr_iter=5):
@@ -115,60 +111,68 @@ class PerceptronTagger:
         self._sentences = list()            # to be populated by self._make_tagdict...
         self._make_tagdict(sentences)
         self.model.tags = self.tags
+        num_sentences = len(self._sentences)
         for iter_ in range(nr_iter):
-            num_sentences = len(self._sentences)
-            for curr_sentence, sentence in enumerate(self._sentences):
+            for curr_sent_num, sentence in enumerate(self._sentences):
                 if not sentence:
                     continue
-                utils.update_progress((curr_sentence + 1)/num_sentences)
+                utils.update_progress((curr_sent_num + 1)/num_sentences)
 
-                words, tags = zip(*sentence)
-                prev, prev2 = self.START
-                context = self.START + [self.normalize(w) for w in words] + self.END
+                words, true_tags = zip(*sentence)
+                guess_tags = []
                 for i, word in enumerate(words):
                     guess = self.tagdict.get(word)
                     if not guess:
-                        feats = self._get_features(i, word, context, prev, prev2)
+                        feats = self._get_features(words, guess_tags, i)
                         guess = self.model.predict(feats)
-                        self.model.update(feats, tags[i], guess)
-                    prev2 = prev
-                    prev = guess
+                        self.model.update(feats, true_tags[i], guess)
+                    guess_tags.append(guess)
             random.shuffle(self._sentences)
-        # We don't need the training sentences anymore, and we don't want to
-        # waste space on them when we pickle the trained tagger.
-        self._sentences = None
         self.model.average_weights()
+
+        # Get's rid of wasted space after training.
+        self.model.erase_useless_data()
 
     def normalize(self, word):
         '''Normalization used in pre-processing.
         - All words are lower cased
         - All numeric words are returned as !DIGITS'''
         if word.isdigit():
-                return '!DIGITS'
+            return '!DIGITS'
         else:
-                return word.lower()
+            return word.lower()
 
-    def _get_features(self, i, word, context, prev, prev2):
-        '''Map words into a feature representation.'''
-        def add(name, *args):
-            features[str.join(' ', (name,) + tuple(args))] += 1
+    def _get_features(self, words, tags, i):
+        '''
+        Map words into a feature representation.
 
-        i += len(self.START)
+        :type words: list(str)
+        :type tags: list(str)
+        :type i: int
+        '''
         features = defaultdict(int)
-        add('bias')
-        add('i suffix', word[-3:])
-        add('i pref1', word[0])
-        add('i-1 tag', prev)
-        add('i-2 tag', prev2)
-        add('i tag+i-2 tag', prev, prev2)
-        add('i word', context[i])
-        add('i-1 tag+i word', prev, context[i])
-        add('i-1 word', context[i-1])
-        add('i-1 suffix', context[i-1][-3:])
-        add('i-2 word', context[i-2])
-        add('i+1 word', context[i+1])
-        add('i+1 suffix', context[i+1][-3:])
-        add('i+2 word', context[i+2])
+        # Padding the tags, words and index
+        words = self.START + [self.normalize(w) for w in words] + self.END
+        tags = self.START + tags
+        i += len(self.START)
+
+        def add_feature(feat_id, *values):
+            features[str.join(' ', (feat_id,) + tuple(values))] += 1
+
+        add_feature('bias')
+        add_feature('word_i_suffix', utils.get_suffix(words[i]))
+        add_feature('word_i_pref1', words[i][0])
+        add_feature('tag_(i-1)', tags[i-1])
+        add_feature('tag_(i-2)', tags[i-2])
+        add_feature('tag_(i-1) tag_(i-2)', tags[i-1], tags[i-2])
+        add_feature('word_i', words[i])
+        add_feature('tag_(i-1) word_i', tags[i-1], words[i])
+        add_feature('word_(i-1)', words[i-1])
+        add_feature('word_(i-1)_suffix', utils.get_suffix(words[i-1]))
+        add_feature('word_(i-2)', words[i-2])
+        add_feature('word_(i+1)', words[i+1])
+        add_feature('word_(i+1)_suffix', utils.get_suffix(words[i+1]))
+        add_feature('word_(i+2)', words[i+2])
         return features
 
     def _make_tagdict(self, sentences):
@@ -190,11 +194,9 @@ class PerceptronTagger:
             if n >= freq_thresh and (mode / n) >= ambiguity_thresh:
                 self.tagdict[word] = tag
 
-    def erase_useless_data(self):
-        self.model.erase_useless_data()
-
     def save(self, filepath):
         self.model.save(filepath)
 
     def load(self, filepath):
         self.model.load(filepath)
+        self.tags = self.model.tags
