@@ -1,75 +1,161 @@
 # -*- coding: utf-8 -*-
 import pickle
-import logging
+import random
+import numpy as np
 from collections import defaultdict
 from morphological_classifier import constants, utils
-import numpy as np
-import matplotlib.pyplot as plt
-from itertools import product as cartesian_product
-from datetime import datetime
-import pprint
-
-
-def parse_word_tag(string_element):
-    '''Parses an element of the form Word_tag1+tag2...|extra_info
-    into a (word, tags) tuple.'''
-    # TODO: CONSIDER USING THE NORMALIZATION CLASS METHOD INSTEAD
-    word, tags_str = string_element.split('_')
-    return word.lower(), tags_str
-
-
-def parse_sentence(sentence):
-    '''Gets "Word1_tag1 word2_tag2 word3_tag3..."
-        returns [("word1", "tag1"), ("word2", "tag2"), ...]'''
-    parsed_sentence = []
-    for word_tags in sentence.split():
-        parsed_sentence.append(parse_word_tag(word_tags))
-    return parsed_sentence
+from morphological_classifier.performance_metrics import PerformanceMetrics
+from morphological_classifier.stats_plot import StatsPlotter
+from morphological_classifier.perceptron import AveragedPerceptron
 
 
 class MorphologicalClassifier:
-    def __init__(self, tagger, save_path=None):
-        self.tagger = tagger
-        self.tags = set()
+    # Tags used for padding, since the context uses
+    # two words before and after the current word
+    START = ['__START__', '__START2__']
+    END = ['__END__', '__END2__']
+    def __init__(self, save_path=None):
+        self.model = AveragedPerceptron()
+        self.tags = constants.TAGS
+        self.tag_dict = dict()
         self.isTrained = False
 
     def predict(self, phrase):
-        return self.tagger.tag(phrase.split())
+        ''':type phrase: str
+            :rtype: list(tuple(str, str))'''
+        output = []
+        tags = []
+        words = phrase.split()
+        for i, word in enumerate(words):
+            tag = self.tag_dict.get(word)
+            if not tag:
+                features = self._get_features(words, tags, i)
+                tag = self.model.predict_tag(features)
+            output.append((word, tag))
+            tags.append(tag)
+        return output
 
-    def save(self, filepath):
-        self.tagger.save(filepath)
+    def _get_features(self, words, tags, i):
+        '''
+        Map words into a feature representation.
 
-    def load(self, filepath):
-        self.tagger.load(filepath)
-        self.isTrained = True
-        self.tags = self.tagger.tags
+        :type words: list(str)
+        :type tags: list(str)
+        :type i: int
+        '''
+        features = defaultdict(int)
+        # Padding the tags, words and index
+        words = self.START + [self.normalize(w) for w in words] + self.END
+        tags = self.START + tags
+        i += len(self.START)
 
-    def train(self, filepath):
+        def add_feature(feat_id, *values):
+            features[str.join(' ', (feat_id,) + tuple(values))] += 1
+
+        add_feature('bias')
+        add_feature('tag_(i-1)', tags[i-1])
+        add_feature('tag_(i-2)', tags[i-2])
+        add_feature('tag_(i-1) tag_(i-2)', tags[i-1], tags[i-2])
+        add_feature('word_i_suffix', utils.get_suffix(words[i]))
+        add_feature('word_i_pref_1', words[i][0])
+        add_feature('word_i', words[i])
+        add_feature('tag_(i-1) word_i', tags[i-1], words[i])
+        add_feature('word_(i-1)', words[i-1])
+        add_feature('word_(i-1)_suffix', utils.get_suffix(words[i-1]))
+        add_feature('word_(i-2)', words[i-2])
+        add_feature('word_(i+1)', words[i+1])
+        add_feature('word_(i+1)_suffix', utils.get_suffix(words[i+1]))
+        add_feature('word_(i+2)', words[i+2])
+        return features
+
+    def _make_tag_dict(self, sentences):
+        '''Make a tag dictionary for single-tag words.
+        :param sentences: A list of list of (word, tag) tuples.'''
+        counts = defaultdict(lambda: defaultdict(int))
+        for sentence in sentences:
+            for word, tag in sentence:
+                counts[word][tag] += 1
+        freq_thresh = 20
+        ambiguity_thresh = 0.97
+        for word, tag_freqs in counts.items():
+            tag, mode = max(tag_freqs.items(), key=lambda item: item[1])
+            n = sum(tag_freqs.values())
+            # Don't add rare words to the tag dictionary
+            # Only add quite unambiguous words
+            if n >= freq_thresh and (mode / n) >= ambiguity_thresh:
+                self.tag_dict[word] = tag
+
+    def parse_sentence(self, sentence):
+        '''Gets "Word1_tag1 word2_tag2 word3_tag3..."
+            returns [("word1", "tag1"), ("word2", "tag2"), ...]'''
+
+        def parse_word_tag(string_element):
+            '''Parses an element of the form Word_tag1+tag2...|extra_info
+            into a (word, tags) tuple.'''
+            word, tags_str = string_element.split('_')
+            return self.normalize(word), tags_str
+
+        parsed_sentence = []
+        for word_tags in sentence.split():
+            parsed_sentence.append(parse_word_tag(word_tags))
+        return parsed_sentence
+
+    def normalize(self, word):
+        '''Normalization used in pre-processing.
+        - All words are lower cased
+        - All numeric words are returned as !DIGITS'''
+        if word.isdigit():
+            return '!DIGITS'
+        else:
+            return word.lower()
+
+    def train(self, filepath, nr_iter=5):
         if self.isTrained:
             print('Classifier already trained')
             return
 
+        print('Starting training phase...')
         with open(filepath, 'r', encoding=constants.ENCODING) as f:
             sentences = f.readlines()
-        parsed_sentences = [parse_sentence(sentence) for sentence in sentences]
-        self.tagger.train(parsed_sentences)
+        parsed_sentences = [self.parse_sentence(s) for s in sentences]
+        self._make_tag_dict(parsed_sentences)
+        num_sentences = len(parsed_sentences)
+
+        for iter_ in range(nr_iter):
+            for curr_sent_num, sentence in enumerate(parsed_sentences):
+                if not sentence:
+                    continue
+                utils.update_progress((curr_sent_num + 1)/num_sentences)
+
+                words, true_tags = zip(*sentence)
+                guess_tags = []
+                for i, word in enumerate(words):
+                    guess = self.tag_dict.get(word)
+                    if not guess:
+                        feats = self._get_features(words, guess_tags, i)
+                        guess = self.model.predict_tag(feats)
+                        self.model.update(feats, true_tags[i], guess)
+                    guess_tags.append(guess)
+            random.shuffle(parsed_sentences)
+        self.model.average_weights()
+
+        self.model.erase_useless_data()
         self.isTrained = True
-        self.tags = self.tagger.tags
 
     def test(self, filepath):
         if not self.isTrained:
-            print('Tagger not yet trained')
+            print('Model not yet trained')
             return
 
         print('Starting testing phase...')
         with open(filepath, 'r', encoding=constants.ENCODING) as f:
             sentences = f.readlines()
-        parsed_sentences = [
-            parse_sentence(s) for s in sentences
-            ]
+        parsed_sentences = [self.parse_sentence(s) for s in sentences]
+
         # Metrics stuff
         num_sentences = len(parsed_sentences)
-        metrics = PerformanceMetrics(self.tags, num_sentences)
+        metrics = PerformanceMetrics(num_sentences)
+        metrics.checkin_time()
 
         for sent_num, sentence in enumerate(parsed_sentences):
             utils.update_progress((sent_num + 1)/num_sentences)
@@ -86,122 +172,21 @@ class MorphologicalClassifier:
                 if guess_tag == true_tag:
                     metrics.update_sentence_score(index)
             metrics.checkout_sentence_score()
+        metrics.checkout_time()
+        metrics.build_confusion_matrix()
         metrics.log()
 
         plotter = StatsPlotter()
-        plotter.plot_confusion_matrix(metrics, metrics.tags)
+        plotter.plot_confusion_matrix(metrics.confusion_matrix, metrics.tags, normalize=True)
 
+    def save(self, filepath):
+        with open(filepath, 'wb') as f:
+            pickle.dump(self.__dict__, f, -1)
 
-class PerformanceMetrics:
-    '''Measures performance of the classifier on a test file'''
-    def __init__(self, tags, num_sentences=0):
-        self.tags = tags
-        actual_vs_predicted = cartesian_product(tags, tags)
-        self.confusion_dict = {each: 0 for each in actual_vs_predicted}
-        self.correct_sentences = 0
-        self.total_sentences = num_sentences
-        self.sentence_score = []
-        self.isNormalized = False
-
-    def update_predicted(self, actual, predicted):
-        if (actual, predicted) in self.confusion_dict:
-            self.confusion_dict[actual, predicted] += 1
-
-    def init_sentence_score(self, sentence_len):
-        '''Counts how many correct words are in the sentence'''
-        self.sentence_score = [False] * sentence_len
-
-    def update_sentence_score(self, i):
-        self.sentence_score[i] = True
-
-    def checkout_sentence_score(self):
-        if all(self.sentence_score):
-            self.correct_sentences += 1
-
-    def sentences_accuracy(self):
-        '''Gets the % of sentences that were perfectly predicted.'''
-        return utils.safe_division(self.correct_sentences, self.total_sentences)
-
-    def _total_count(self, tag):
-        count = 0
-        for actual, predicted in self.confusion_dict:
-            if actual == tag:
-                count += self.confusion_dict[actual, predicted]
-        return count
-
-    def tag_accuracies(self):
-
-        def _tag_hit_rate(tag):
-            tag_hits = self.confusion_dict[tag, tag]
-            tag_total_count = self._total_count(tag)
-            return utils.safe_division(tag_hits, tag_total_count)
-
-        tag_hit_rates = {}
-        for tag in self.tags:
-            tag_hit_rates[tag] = _tag_hit_rate(tag)
-        return tag_hit_rates
-
-    def normalize(self):
-        normalized_conf_dict = {}
-        for actual, pred in self.confusion_dict:
-            normalized_conf_dict[actual, pred] = self.confusion_dict[actual, pred] / self._total_count(actual)
-        self.confusion_dict = normalized_conf_dict
-        self.isNormalized = True
-
-    def get_confusion_matrix(self):
-        N = len(self.tags)
-        dtype = 'uint8' if not self.isNormalized else 'float32'
-        confusion_matrix = np.empty([N, N], dtype=dtype)
-        index_to_tag = {index: tag for index, tag in enumerate(sorted(self.tags))}
-        for i, j in cartesian_product(range(N), range(N)):
-            confusion_matrix[i, j] = self.confusion_dict[index_to_tag[i], index_to_tag[j]]
-        return confusion_matrix
-
-    def log(self):
-        logging.basicConfig(
-            filename='performance_statistics.log',
-            format='%(asctime)s [%(levelname)s]:  %(message)s',
-            datefmt='%d-%m-%Y %H:%M:%S',
-            level=logging.INFO)
-        logger = logging.getLogger(__name__)
-        logger.info('Fraction of correct sentences: ' + str(self.sentences_accuracy()))
-        logger.info('Tag accuracies: ' + pprint.pformat(self.tag_accuracies()))
+    def load(self, filepath):
+        with open(filepath, 'rb') as f:
+            self.__dict__ = pickle.load(f)
+        self.isTrained = True
 
     def __getitem__(self, key):
-        return self.confusion_dict[key]
-
-
-class StatsPlotter:
-    def __init__(self):
-        pass
-
-    def plot_confusion_matrix(self, confusion_dict, classes,
-                          title='Confusion Matrix',
-                          cmap=plt.cm.Blues):
-        confusion_dict.normalize()
-        cm = confusion_dict.get_confusion_matrix()
-        classes = sorted(classes)
-        n_classes = len(classes)
-
-        plt.imshow(cm, interpolation='nearest', cmap=cmap)
-        plt.title(title)
-        plt.colorbar()
-        tick_marks = np.arange(n_classes)
-        plt.xticks(tick_marks, classes, rotation=90)
-        plt.yticks(tick_marks, classes)
-
-        thresh = cm.max() / 2
-        fmt = '.2f'
-        for i, j in cartesian_product(range(n_classes), range(n_classes)):
-            plt.text(j, i, format(cm[i, j], fmt).rstrip('0').rstrip('.'),
-                     horizontalalignment="center",
-                     color="white" if cm[i, j] > thresh else "black",
-                     fontsize=6)
-
-        plt.tight_layout()
-        plt.xlabel('Predicted label')
-        plt.ylabel('True label')
-        fig = plt.figure(num=1)
-        plt.draw()
-        fig.savefig('confusion_matrix.png', dpi=fig.dpi)
-        plt.show()
+        return self.confusion_matrix[key]
