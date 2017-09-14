@@ -1,28 +1,35 @@
 # -*- coding: utf-8 -*-
-import pickle
-import random
-import numpy as np
-from collections import defaultdict
-from morphological_classifier import constants, utils
+from morphological_classifier.perceptron import AveragedPerceptron
 from morphological_classifier.performance_metrics import PerformanceMetrics
 from morphological_classifier.stats_plot import StatsPlotter
-from morphological_classifier.perceptron import AveragedPerceptron
+from morphological_classifier import constants, utils
+import numpy as np
+from collections import defaultdict
+from sklearn import model_selection
+import pickle
+import random
 
 
 class MorphologicalClassifier:
-    # Tags used for padding, since the context uses
+    # Tags used for padding, since the _get_features method uses
     # two words before and after the current word
     START = ['__START__', '__START2__']
     END = ['__END__', '__END2__']
-    def __init__(self, save_path=None):
+    def __init__(self, metrics, plotter, save_path, data_path, logging, n_splits):
         self.model = AveragedPerceptron()
+        self.metrics = metrics
+        self.plotter = plotter
         self.tags = constants.TAGS
         self.tag_dict = dict()
+        self.save_path = save_path
+        self.data_path = data_path
+        self.n_splits = n_splits
+        self.logging = logging
         self.isTrained = False
 
     def predict(self, phrase):
         ''':type phrase: str
-            :rtype: list(tuple(str, str))'''
+           :rtype: list(tuple(str, str))'''
         output = []
         tags = []
         words = phrase.split()
@@ -44,6 +51,7 @@ class MorphologicalClassifier:
         :type i: int
         '''
         features = defaultdict(int)
+        starts_capitalized = words[i][0].isupper()
         # Padding the tags, words and index
         words = self.START + [self.normalize(w) for w in words] + self.END
         tags = self.START + tags
@@ -53,11 +61,11 @@ class MorphologicalClassifier:
             features[str.join(' ', (feat_id,) + tuple(values))] += 1
 
         add_feature('bias')
+        #add_feature('word_i_pref_1', words[i][0])
         add_feature('tag_(i-1)', tags[i-1])
         add_feature('tag_(i-2)', tags[i-2])
         add_feature('tag_(i-1) tag_(i-2)', tags[i-1], tags[i-2])
         add_feature('word_i_suffix', utils.get_suffix(words[i]))
-        add_feature('word_i_pref_1', words[i][0])
         add_feature('word_i', words[i])
         add_feature('tag_(i-1) word_i', tags[i-1], words[i])
         add_feature('word_(i-1)', words[i-1])
@@ -66,6 +74,7 @@ class MorphologicalClassifier:
         add_feature('word_(i+1)', words[i+1])
         add_feature('word_(i+1)_suffix', utils.get_suffix(words[i+1]))
         add_feature('word_(i+2)', words[i+2])
+        #add_feature('word_i_starts_capitalized', str(starts_capitalized))
         return features
 
     def _make_tag_dict(self, sentences):
@@ -109,23 +118,37 @@ class MorphologicalClassifier:
         else:
             return word.lower()
 
-    def train(self, filepath, nr_iter=5):
+    def train_test(self):
+        with open(self.data_path, 'r', encoding=constants.ENCODING) as f:
+            sentences = f.readlines()
+        parsed_sentences = np.array([self.parse_sentence(s) for s in sentences])
+        kf = model_selection.KFold(n_splits=self.n_splits)
+        for i, (train, test) in enumerate(kf.split(parsed_sentences)):
+            print('\nStarting train/test {} of {}'.format(i+1, self.n_splits))
+            self.train(train_sentences=parsed_sentences[train])
+            self.test(test_sentences=parsed_sentences[test], metrics=self.metrics)
+            self.reset()
+        if self.logging:
+            self.metrics.log()
+        self.plotter.plot_confusion_matrix(self.metrics.confusion_matrix, normalize=True)
+        #self.save()
+
+    def train(self, train_sentences, nr_iter=5):
         if self.isTrained:
             print('Classifier already trained')
             return
 
         print('Starting training phase...')
-        with open(filepath, 'r', encoding=constants.ENCODING) as f:
-            sentences = f.readlines()
-        parsed_sentences = [self.parse_sentence(s) for s in sentences]
-        self._make_tag_dict(parsed_sentences)
-        num_sentences = len(parsed_sentences)
+        self._make_tag_dict(train_sentences)
+        num_sentences = len(train_sentences)
 
         for iter_ in range(nr_iter):
-            for curr_sent_num, sentence in enumerate(parsed_sentences):
+            # Padding
+            sent_padd = num_sentences * iter_
+            for sent_num, sentence in enumerate(train_sentences):
                 if not sentence:
                     continue
-                utils.update_progress((curr_sent_num + 1)/num_sentences)
+                utils.update_progress((sent_num + sent_padd + 1)/(nr_iter * num_sentences))
 
                 words, true_tags = zip(*sentence)
                 guess_tags = []
@@ -136,31 +159,24 @@ class MorphologicalClassifier:
                         guess = self.model.predict_tag(feats)
                         self.model.update(feats, true_tags[i], guess)
                     guess_tags.append(guess)
-            random.shuffle(parsed_sentences)
+            random.shuffle(train_sentences)
         self.model.average_weights()
 
-        self.model.erase_useless_data()
+        self.erase_useless_data()
         self.isTrained = True
 
-    def test(self, filepath):
+    def test(self, test_sentences, metrics):
         if not self.isTrained:
             print('Model not yet trained')
             return
 
         print('Starting testing phase...')
-        with open(filepath, 'r', encoding=constants.ENCODING) as f:
-            sentences = f.readlines()
-        parsed_sentences = [self.parse_sentence(s) for s in sentences]
-
         # Metrics stuff
-        num_sentences = len(parsed_sentences)
-        metrics = PerformanceMetrics(num_sentences)
-        metrics.checkin_time()
+        num_sentences = len(test_sentences)
+        metrics.checkin()
 
-        for sent_num, sentence in enumerate(parsed_sentences):
+        for sent_num, sentence in enumerate(test_sentences):
             utils.update_progress((sent_num + 1)/num_sentences)
-
-            metrics.init_sentence_score(len(sentence))
 
             words, true_tags = zip(*sentence)
             test_phrase = str.join(' ', words)
@@ -169,24 +185,26 @@ class MorphologicalClassifier:
             for index, (word, guess_tag) in enumerate(wordtag_guess):
                 true_tag = true_tags[index]
                 metrics.update_predicted(true_tag, guess_tag)
-                if guess_tag == true_tag:
-                    metrics.update_sentence_score(index)
-            metrics.checkout_sentence_score()
-        metrics.checkout_time()
+
+        metrics.checkout()
         metrics.build_confusion_matrix()
-        metrics.log()
 
-        plotter = StatsPlotter()
-        plotter.plot_confusion_matrix(metrics.confusion_matrix, metrics.tags, normalize=True)
-
-    def save(self, filepath):
-        with open(filepath, 'wb') as f:
+    def save(self):
+        with open(self.save_path, 'wb') as f:
             pickle.dump(self.__dict__, f, -1)
 
-    def load(self, filepath):
-        with open(filepath, 'rb') as f:
+    def load(self):
+        with open(self.save_path, 'rb') as f:
             self.__dict__ = pickle.load(f)
         self.isTrained = True
+
+    def erase_useless_data(self):
+        self.model.erase_useless_data()
+
+    def reset(self):
+        self.model = AveragedPerceptron()
+        self.tag_dict = dict()
+        self.isTrained = False
 
     def __getitem__(self, key):
         return self.confusion_matrix[key]

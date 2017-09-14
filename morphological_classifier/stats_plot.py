@@ -6,14 +6,18 @@ from itertools import product as cartesian_product
 
 
 class StatsPlotter:
-    def __init__(self):
-        pass
+    def __init__(self, plot_name, plotting):
+        self.plot_name = plot_name if plot_name else 'confusion_matrix'
+        self.plotting = plotting
 
-    def plot_confusion_matrix(self, cm, classes,
+    def plot_confusion_matrix(self, cm,
                               normalize=False,
                               title='Confusion Matrix',
                               cmap=plt.cm.Blues):
-        classes = sorted(classes)
+        if not self.plotting:
+            return
+
+        classes = sorted(constants.TAGS)
         n_classes = len(classes)
         if normalize:
             cm = cm.astype('float') / cm.sum(axis=1)[:, np.newaxis]
@@ -30,12 +34,17 @@ class StatsPlotter:
         for i, j in cartesian_product(range(cm.shape[0]), range(cm.shape[1])):
             plt.text(j, i, format(cm[i, j], fmt).rstrip('0').rstrip('.'),
                      horizontalalignment="center",
+                     verticalalignment="center",
                      color="white" if cm[i, j] > thresh else "black",
-                     fontsize=6)
+                     fontsize=5)
 
         plt.tight_layout()
         plt.xlabel('Predicted label')
         plt.ylabel('True label')
-        fig = plt.figure(num=1)
+        fig = plt.gcf()
+        fig.set_size_inches(8, 6)
+        plt.savefig(str.join('', ['conf_matrices/',
+                    self.plot_name]) + '.png',
+                    dpi=200)
         plt.draw()
-        plt.show()
+        #plt.show()
